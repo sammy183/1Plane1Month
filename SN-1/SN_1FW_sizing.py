@@ -539,7 +539,7 @@ def Clalpha_csv(path, plot = False, save = False, lowlim = -0.005, highlim = 10.
     return(radClalpha)
 
 #%% airfoil analysis
-Clalpha = Clalpha_csv('xf-mh45-il-200000.csv', plot = False, save = False)
+Clalpha = Clalpha_csv('xf-mh45-il-200000.csv', plot = True, save = False, highlim = 8.55)
 Sexp = Sw           # flying wing
 CLalpha(AR, 0.0, M, Clalpha, Sexp, Sw, useF = False)
     
