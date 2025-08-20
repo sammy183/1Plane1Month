@@ -11,10 +11,13 @@ RC aircraft with COTS propulsion components, <100Wh, <55lb MGTOW,
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import patheffects
+import pandas as pd
+from scipy.stats import linregress
 
 lbfft2_kgm2 = 4.88243 # conversion factor from lbf/ft^2 to kg/m^3 #REVIEW UNITS LATER
-lbkg = 1/2.205 # cardinal sin, ik ik
+lbkg = 0.45359237 # cardinal sin, ik ik
 ftm = 0.3048
+lbfN = 4.44822
 
 #fun sidetrack
 # from datetime import datetime
@@ -277,6 +280,8 @@ class TW_WS:
         # img = ax.contourf(x, y, W0)
         # plt.colorbar(img)
         # WORK ON THIS (raymer pg 758)
+        
+        # Want to add an efficiency countour (based on wing area)
 
         plt.minorticks_on()
         plt.grid(True)#, which='both')
@@ -315,10 +320,12 @@ class TW_WS:
         elif con1 in WSlims:
             TW2 = conlist[con2]
             index = np.argmin(np.abs(conlist[con1]*np.ones(TW2.size) - self.WS))
+            WS = conlist[con1]
             print(f'Optimum at {TW2[index]:.4f} watt/kg and {conlist[con1]:.4f} kg/m2')
         elif con2 in WSlims:
             TW1 = conlist[con1]
             index = np.argmin(np.abs(conlist[con2]*np.ones(TW1.size) - self.WS))
+            WS = conlist[con2]
             print(np.abs(conlist[con2]*np.ones(TW1.size) - TW1))
             print(index)
             print(f'Optimum at {TW1[index]:.4f} watt/kg and {conlist[con2]:.4f} kg/m2')
@@ -327,14 +334,22 @@ class TW_WS:
             TW2 = conlist[con2]
             index = np.argmin(np.abs(TW1-TW2))
             midanswer = (TW1[index]+TW2[index])/2
+            WS = self.WS[index]
             print(f'Optimum at {midanswer:.4f} watt/kg and {self.WS[index]:.4f} kg/m2')
-
+        return(WS)
 
         
 #%% using for dash 1
-AR = 8      # randomly chosen
+AR = 8     # randomly chosen, NOTE: AR ONLY AFFECTS THE P/W IN THIS SCENARIO (and marginally!), but it'll affect efficiency a lot more, how to incorporate that?
 e = 0.8     # who knows if it's acurate
 CD0 = 0.02  # total guess
+cruiseV = 35 # m/s
+turnV = 0.7*cruiseV #initial approx
+climbV = 0.8*cruiseV
+climbrate = 1 # m/s
+nreq = 2
+CLmax = 1.1
+
 
 analysis = TW_WS(AR, e, CD0) # start analysis
 
@@ -342,30 +357,196 @@ WS = np.linspace(5*lbfft2_kgm2, 15*lbfft2_kgm2, 100)
 analysis.WSrange(WS) # initialize W/S boundaries
 
 # put these first so they can change the W/S boundaries to match
-analysis.WSstall(9, 1.1)
+analysis.WSstall(9, CLmax)
 # analysis.WSmaxproprange(35)
 
-analysis.TW_susturn(2, 20)
-analysis.TW_cruise(25)
-analysis.TW_climb(1, 20)
+analysis.TW_susturn(nreq, turnV)
+analysis.TW_cruise(cruiseV)
+analysis.TW_climb(climbrate, climbV)
 # analysis.TW_takeoff(100, 'dry concrete', 1.6*0.7, 0.2, 1.6)
-# analysis.plot(title = 'V0 for SN-1FWHL', save = True)
+# analysis.plot(title = 'V2 for SN-1FWHL (8 AR)', save = False)
 
-analysis.findoptimum('stall', 'climb rate')
+wingloading = analysis.findoptimum('stall', 'climb rate')
+
+w0_V0 = 6*lbkg
+Sw = (w0_V0)/wingloading
+# print(f'Sw = {Sw} m')
+
+#%% planform calc funcs (for ease of use)
+def planformcalc(Sw, AR, gamma, unit = 'm'):
+    '''
+    only works for wings with taper (no sweep)
+    
+    Sw input in m2
+    AR (aspect ratio)
+    gamma (taper ratio)'''
+    if unit == 'm':
+        b = np.sqrt(AR*Sw)
+        print(f'b = {b:.5f} m')
+        croot = (2*Sw)/(b*(1 + gamma))
+        print(f'Croot = {croot:.5f} m')
+        ctip = gamma*croot
+        print(f'Ctip = {ctip:.5f} m')
+        mac = Sw/b 
+        print(f'MAC = {mac:.5f} m')
+        return(b, croot, ctip, mac)
+    elif unit == 'ft':
+        Sw = Sw/ftm/ftm
+        print(f'Sw = {Sw:.10f} ft2')
+        b = np.sqrt(AR*Sw)
+        print(f'b = {b:.5f} ft')
+        croot = (2*Sw)/(b*(1 + gamma))
+        print(f'Croot = {croot:.5f} ft')
+        ctip = gamma*croot
+        print(f'Ctip = {ctip:.5f} ft')
+        mac = Sw/b 
+        print(f'MAC = {mac:.5f} ft')
+        return(b, croot, ctip, mac)
 
 
-#%%
-205/lbfft2_kgm2
+def Re(V, l, rho = 1.23, mu = 1.81e-5):
+    '''standard metric values used for air'''
+    Re = rho*V*l/mu
+    if Re < 5e5:
+        flow = 'laminar'
+    else:
+        flow = 'turbulent'
+    print(f'Re = {Re:.0f}, {flow}')
+    return(Re)
 
-#%%
-6*lbkg
+def CLreq(m, V, Sw, rho = 1.23, g = 9.807):
+    '''
+    m in kg
+    V in m/s
+    Sw in m2
+    '''
+    CL = (m*g)/(0.5*rho*(V**2)*Sw)
+    print(f'CL req = {CL:.5f}')
+    return(CL)
 
-#%%
-2.72/54.8
-#%%
-0.049635/ftm/ftm
-#%%
-np.sqrt(8*0.5343)
+def M(V, gamma = 1.4, base = True, T = 293.15, R = 8.31, M = 0.02897):
+    '''
+    V in m/s 
+    gamma is gas const (default 1.4)
+    Mbase is at sea level
+    T is standard (293.15 K aka 20 deg C)
+    R is 8.31 J/mol*K for air
+    M is 0.02897 kg/mol for air'''
+    if base:
+        a = 343 # m/s
+    else:
+        a = np.sqrt(T*gamma*R/M)
+    M = V/a 
+    print(f'M = {M:.4f}')
+    return(M)
 
-#%%
-2.72*3.765
+#%% using helper funcs
+taper = 0.4
+b, croot, ctip, mac = planformcalc(Sw, AR, 0.4, unit = 'm')
+Re(cruiseV, mac)
+
+CLreq(w0_V0, cruiseV, Sw)
+print('')
+b, croot, ctip, mac = planformcalc(Sw, AR, 0.4, unit = 'ft')
+
+M = M(cruiseV, base = True)
+
+#%% airfoil aerodynamics
+def CLalpha(AR, sweep_maxt, M, Clalpha, Sexposed, Sref, useF = True, d = False, b = False):
+    '''
+    AR (aspect ratio)
+    sweep_maxt is the sweep angle at maximum wing thickness
+    M is mach #
+    CLalpha is the airfoil lift slope
+    Sexposed is exposed wing planform, i.e. Sw - the area covered by the fuselage (m^2)
+    Sref is the planform area (m^2)
+    '''
+    if useF:
+        if type(d) != float or type(b) != float:
+            print('b or d not defined')
+        F = 1.07*((1 + d/b)**2)
+    else:
+        F = 1.0 
+    
+    if useF and F*(Sexposed/Sref) > 1.0:
+        print('adjusting fuselage spillover value (F*Sexp/Sref)')
+        F = 0.98/((Sexposed/Sref))
+    
+    beta = np.sqrt(1 - M**2)
+    eta = Clalpha/(2*np.pi/beta)
+    CLalpha = ((2*np.pi*AR)/(2 + np.sqrt(4 + (((AR**2)*(beta**2))/(eta**2))*(1 + (np.tan(sweep_maxt)**2)/(beta**2)))))*(Sexposed/Sref)*F
+    print(f'CLalpha = {CLalpha:.5f} 1/rad')
+    return(CLalpha)
+
+def Clalpha_csv(path, plot = False, save = False, lowlim = -0.005, highlim = 10.005):
+    '''
+    returns CL vs alpha in 1/rad
+    
+    takes in the CSV exportable from airfoiltools in the format:
+         XFOIL         Version 6.96
+  
+         Calculated polar for: MH 45  9.85%                                    
+          
+         1 1 Reynolds number fixed          Mach number fixed         
+          
+         xtrf =   1.000 (top)        1.000 (bottom)  
+         Mach =   0.000     Re =     0.200 e 6     Ncrit =   9.000
+      
+         Alpha      Cl       Cd      Cdp      Cm  Top_Xtr  Bot_Xtr
+         DATA HERE
+         
+         
+    '''
+    # with open(path) as f:
+    #     data_content = f.read()
+    #     print(data_content)
+    
+    df = pd.read_csv(path, skiprows = 10)
+    alphafilter = df['Alpha']
+    alphas = alphafilter.where(alphafilter < highlim).where(alphafilter > lowlim).dropna()
+    Cls = df['Cl']
+    Cls = Cls.where(alphafilter < highlim).where(alphafilter > lowlim).dropna()
+    # plt.plot(df['Alpha'], df['Cl'])
+    # fitted line
+    alphas = alphas.to_numpy()
+    Cls = Cls.to_numpy()
+    fit, residuals, rank, singular_values, rcond = np.polyfit(alphas, Cls, 1, full = True)
+    
+    if plot:
+        # for fitted line plotting
+        alphasgrid = np.linspace(alphas.min(), alphas.max(), 2)
+        polyobj = np.poly1d(fit)
+        Clsfit = polyobj(alphasgrid)
+        sse = residuals[0]
+        Clsmean = np.mean(Cls)
+        sst = np.sum((Cls - Clsmean)**2)
+        r_squared = 1 - (sse / sst)
+        
+        fig, ax = plt.subplots(figsize = (6, 4), dpi = 1000)
+        ax.plot(alphas, Cls, label = 'data from airfoiltools csv')
+        ax.plot(alphasgrid, Clsfit, '--', label = f'line of best fit\nClalpha = {fit[0]:.5f} 1/deg\n{'':13}= {fit[0]*180/np.pi:.5f} 1/rad\nR^2 = {r_squared:.3f}')
+        plt.xlabel(r'Angle of Attack ($\degree$)')
+        plt.ylabel(r'$C_l$')
+        plt.title(f'Clalpha fit for {path.split('-')[1]} airfoil')
+        plt.legend()
+        plt.grid()
+        
+        if save:
+            plt.savefig(f'Clalpha fit for {path.split('-')[1]} airfoil', dpi = 1000)
+        plt.show()
+        
+    radClalpha = fit[0]*180.0/np.pi
+    return(radClalpha)
+
+#%% airfoil analysis
+Clalpha = Clalpha_csv('xf-mh45-il-200000.csv', plot = True)
+Sexp = Sw           # flying wing
+CLalpha(AR, 0.0, M, Clalpha, Sexp, Sw, useF = False)
+    
+#%% video where a guy designs a low Re flying wing (only watch if stuck)
+# https://www.youtube.com/watch?v=RfdxUrTGUfI
+# flying wing airfoil database
+# https://www.aerodesign.de/english/profile/profile_s.htm
+# v1 airfoil selection
+# http://airfoiltools.com/polar/details?polar=xf-mh45-il-200000
+1.15*.9
