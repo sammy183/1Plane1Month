@@ -12,7 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import patheffects
 import pandas as pd
-from scipy.stats import linregress
+# from scipy.stats import linregress
 
 lbfft2_kgm2 = 4.88243 # conversion factor from lbf/ft^2 to kg/m^3 #REVIEW UNITS LATER
 lbkg = 0.45359237 # cardinal sin, ik ik
@@ -539,7 +539,7 @@ def Clalpha_csv(path, plot = False, save = False, lowlim = -0.005, highlim = 10.
     return(radClalpha)
 
 #%% airfoil analysis
-Clalpha = Clalpha_csv('xf-mh45-il-200000.csv', plot = True)
+Clalpha = Clalpha_csv('xf-mh45-il-200000.csv', plot = False, save = False)
 Sexp = Sw           # flying wing
 CLalpha(AR, 0.0, M, Clalpha, Sexp, Sw, useF = False)
     
