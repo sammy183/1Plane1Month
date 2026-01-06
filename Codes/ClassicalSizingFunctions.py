@@ -59,6 +59,7 @@ def automated_sensitivity(names, variables, base_array, normalization_array, fun
 
 #%% T/W, W/S for dash 1 sizing
 class TW_WS:
+    '''NOTE: intended only for propeller aircraft (refined version will come)'''
     def __init__(self, AR, e, CD0, eta_p):
         '''AR = aspect ratio, e = oswalds efficiency, CD0 is zero-lift drag coefficient'''
         self.rho = 1.23 # kg/m3
