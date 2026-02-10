@@ -1,0 +1,20 @@
+...Comp Geom...
+3 Num Comps
+5 Total Num Meshes
+21728 Total Num Tris
+
+Theo_Area   Wet_Area   Theo_Vol    Wet_Vol  Name
+  100.956     94.971     54.518     52.303  FuselageGeom   
+   85.207     84.733     15.594     15.594  MainWing       
+   85.207     84.733     15.594     15.594  MainWing       
+   13.306     12.878      0.560      0.553  Canard         
+   13.306     12.878      0.560      0.553  Canard         
+-------------------------------------------------
+  297.984    290.192     86.828     84.598  Totals         
+
+Tag_Theo_Area   Tag_Wet_Area    Tag_Name
+      100.956         94.971    FuselageGeom_S_Surf0
+       85.207         84.733    MainWing_S_Surf0
+       85.207         84.733    MainWing_S_Surf1
+       13.306         12.878    Canard_S_Surf0 
+       13.306         12.878    Canard_S_Surf1 

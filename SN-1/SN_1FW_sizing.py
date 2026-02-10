@@ -205,7 +205,7 @@ class TW_WS:
         
         A = (vlof**2)/(2*self.g*dgr)
         C = q*CDto/self.WS
-        D = self.mufric*(1-(q*CLto/WS))
+        D = self.mufric*(1-(q*CLto/self.WS))
 
         TWto = A + C + D
         
@@ -364,7 +364,7 @@ analysis.TW_susturn(nreq, turnV)
 analysis.TW_cruise(cruiseV)
 analysis.TW_climb(climbrate, climbV)
 # analysis.TW_takeoff(100, 'dry concrete', 1.6*0.7, 0.2, 1.6)
-# analysis.plot(title = 'V2 for SN-1FWHL (8 AR)', save = False)
+analysis.plot(title = 'V2 for SN-1FWHL (8 AR)', save = False)
 
 wingloading = analysis.findoptimum('stall', 'climb rate')
 
