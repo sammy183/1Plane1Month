@@ -11,12 +11,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import patheffects
 import pandas as pd
+from Atmosphere import stdatm1976
 # from scipy.stats import linregress
 
 lbfft2_kgm2 = 4.88243 # conversion factor from lbf/ft^2 to kg/m^3 #REVIEW UNITS LATER
 lbkg = 0.45359237 # cardinal sin, ik ik
 ftm = 0.3048
 lbfN = 4.44822
+kgm3_slugft3 = 0.0019403203259304
 
 #fun sidetrack
 # from datetime import datetime
@@ -59,19 +61,28 @@ def automated_sensitivity(names, variables, base_array, normalization_array, fun
 
 #%% T/W, W/S for dash 1 sizing
 class TW_WS:
-    '''NOTE: intended only for propeller aircraft (refined version will come)'''
-    def __init__(self, AR, e, CD0, eta_p):
-        '''AR = aspect ratio, e = oswalds efficiency, CD0 is zero-lift drag coefficient'''
-        self.rho = 1.23 # kg/m3
-        self.g = 9.807 # m/s2
-        self.eta_p = eta_p
+    '''
+    NOTE: intended only for propeller aircraft (refined version will come)
+    
+    uses CD = CDmin + k*CL**2
+    
+    Adjusted model: CD = CDmin + k*(CL-CLminD)**2
+    
+    the units are a mess! redoing to imperial (lbf, ft2, etc)
+    '''
+    def __init__(self, AR, e, CDmin):
+        '''AR = aspect ratio, e = oswalds efficiency, CDmin is minimum drag coefficient'''
+        self.rho = 0.002377 # slug/ft3
+        self.g = 32.174 # ft/s^2
+        # self.eta_p = eta_p
         self.AR = AR
         self.e = e
-        self.CD0 = CD0
+        self.CDmin = CDmin
         self.k = 1/(np.pi*self.AR*self.e)
-        self.TWs = [False, False, False, False, False] # sustained turn, cruise, climb, takeoff, landing
+        self.TWs = [False, False, False, False, False, False] # sustained turn, cruise, climb, takeoff, landing, ceiling
         self.stallreq = False
         self.rangereq = False
+        # self.WS = 
 
         # fake initializations so the plotting f-strings don't mess stuff up
         self.Vturn = -50.0 
@@ -82,62 +93,94 @@ class TW_WS:
         self.dgr = -402
         self.rangeWS = -500
         self.stallWS = -400
+        self.service_ceiling = -2093
         
         # self.TWs corresponds to [sustained turn, cruise, climb, takeoff, landing] for now
         
     def density(self, new_rho):
-        '''Change air density (kg/m3)'''
+        '''Change air density (slug/ft3)'''
         self.rho = new_rho
         
     def WSrange(self, WSrange):
-        '''WSrange is a 1xn array with the possible wing loading values (kg/m2)'''
+        '''WSrange is a 1xn array with the possible wing loading values (lbf/ft2)'''
         self.WS = WSrange
     
-    def TW_susturn(self, n, Vturn):
+    def TW_susturn(self, Vturn, h, phi=False, n = False):
         '''
         Vturn:  turn speed estimate in m/s
         n:      load factor
+        phi:    bank angle (deg)
+        h:      altitude in m (for STDATM1976)
         '''
+        if phi == False and n == False:
+            raise ValueError('One of $\\phi$ or n must be defined')
+        elif phi != False and n != False:
+            raise ValueError('Only define one of $\\phi$ or n')
+        elif phi != False:
+            n = 1/np.cos(phi*(np.pi/180))
+        else:
+            n = n
+        h *= ftm # convert ft to m for OpenVSP atm function
+        self.rho = stdatm1976().rho(h)*kgm3_slugft3
         self.n = n
         self.Vturn = Vturn
         q = 0.5*self.rho*(Vturn**2)
-        TW_susturn = q*self.CD0/(self.WS) + self.WS*self.k*(n**2)/q
-        PW = (TW_susturn/self.eta_p)*Vturn
-        self.TWs[0] = PW #TW_susturn
-        # bonus not implemented yet: T/W >= 2*n*sqrt(CD0/(pi*AR*e))
-        self.indepturnreq = 2*n*np.sqrt(self.CD0*self.k)
+        TW_susturn = q*(self.CDmin/(self.WS) + self.k*((n/q)**2)*self.WS)
+        # PW = (TW_susturn/self.eta_p)*Vturn
+        self.TWs[0] = TW_susturn #PW #TW_susturn
+        # bonus not implemented yet: T/W >= 2*n*sqrt(CDmin/(pi*AR*e))
+        # self.indepturnreq = 2*n*np.sqrt(self.CDmin*self.k)
     
-    def TW_cruise(self, Vcruise):
+    def TW_cruise(self, Vcruise, h):
         '''
-        Vcruise: cruise speed estimate in m/s
+        Vcruise: cruise speed estimate in ft/s
+        h:      altitude in ft (for STDATM1976)
+
         '''
+        h *= ftm
+        self.rho = stdatm1976().rho(h)*kgm3_slugft3
         self.Vcruise = Vcruise
         q = 0.5*self.rho*(Vcruise**2)
-        TW_cruise = q*self.CD0*(1/self.WS) + self.k*(1/q)*self.WS
-        PW = (TW_cruise/self.eta_p)*Vcruise
-        self.TWs[1] = PW #TW_cruise
+        TW_cruise = q*self.CDmin*(1/self.WS) + self.k*(1/q)*self.WS
+        # PW = (TW_cruise/self.eta_p)*Vcruise
+        self.TWs[1] = TW_cruise #TW_cruise
         
-    def TW_climb(self, Vv, Vclimb):
+    def TW_climb(self, Vv, Vclimb, h):
         '''
-        Vv:     climb requirement in m/s
-        Vclimb: climb speed in m/s
+        Vv:     climb requirement in ft/s
+        Vclimb: climb speed in ft/s
+        h:      altitude in ft (for STDATM1976)
+
         '''
+        h *= ftm
+        self.rho = stdatm1976().rho(h)*kgm3_slugft3 # slug/ft3
         self.Vv = Vv
         self.Vclimb = Vclimb
         q = 0.5*self.rho*(Vclimb**2)
-        TW_climb = np.ones(self.WS.size)*Vv/Vclimb + (q/self.WS)*self.CD0 + self.k*(1/q)*self.WS
-        PW = (TW_climb/self.eta_p)*Vclimb
-        self.TWs[2] = PW #TW_climb
+        TW_climb = np.ones(self.WS.size)*Vv/Vclimb + (q/self.WS)*self.CDmin + self.k*(1/q)*self.WS
+        # PW = (TW_climb/self.eta_p)*Vclimb
+        self.TWs[2] = TW_climb #TW_climb
         
-    def TW_takeoff(self, dgr, takeoff_surface, CLto, CDto, CLmax):
+    def TW_ceiling(self, Vv, h):
         '''
-        dgr:    maximum ground roll distance in m
+        Vv:     climb requirement in fps
+        h:      altitude in ft (for STDATM1976)
+        '''
+        # calculate rho at ceiling from VSP code
+        h *= ftm
+        self.rho = stdatm1976().rho(h)*kgm3_slugft3
+        self.TWs[5] = Vv/(np.sqrt((2/self.rho)*self.WS*np.sqrt(self.k/(3*self.CDmin)))) + 4*np.sqrt((self.k*self.CDmin)/3)
+        self.service_ceiling = h/ftm
+        
+    def TW_takeoff(self, dgr, takeoff_surface, CLto, CDto, Vstall):
+        '''
+        dgr:    maximum ground roll distance in ft
         takeoff_surface: one of dry concrete, wet concrete, icy concrete, 
                                 hard turf, firm dirt, soft turf, wet grass
                          determines friction coef
         CLto:   takeoff lift coefficient (i.e. before rotation with high lift devices deployed)
         CDto:   takeoff drag coefficient (i.e. before rotation with high lift devices deployed)
-        
+        Vstall: stall speed (fps)
         '''
         if takeoff_surface == 'dry concrete':
             self.mufric = 0.04
@@ -156,45 +199,55 @@ class TW_WS:
         else:
             print('\nTakeoff surface not recognized\nOptions are: dry concrete, wet concrete, icy concrete\n\t\t\thard turf, firm dirt, soft turf, wet grass')
 
-        Vstall = np.sqrt((2*self.WS)/(self.rho*CLmax))
-        vlof = 1.1*Vstall
-        self.dgr = dgr
+        # Vstall = np.sqrt((2*self.WS)/(self.rho*CLmax))
+        # vlof = 1.1*Vstall
+        # self.dgr = dgr
 
-        q = 0.5*self.rho*(vlof**2)
+        # q = 0.5*self.rho*(vlof**2)
         
-        A = (vlof**2)/(2*self.g*dgr)
-        C = q*CDto/self.WS
-        D = self.mufric*(1-(q*CLto/self.WS))
+        # A = (vlof**2)/(2*self.g*dgr)
+        # C = q*CDto/self.WS
+        # D = self.mufric*(1-(q*CLto/self.WS))
 
-        TWto = A + C + D
+        # TWto = A + C + D
         
-        TWto = (TWto/self.eta_p)*vlof*np.sqrt(2)
+        # TWto = (TWto/self.eta_p)*vlof*np.sqrt(2)
+        self.dgr = dgr # ft
+        # Vstall = np.sqrt((2*self.WS)/(self.rho*CLmax))
+        Vlof = 1.1*Vstall
+        q = 0.5*self.rho*((Vlof/np.sqrt(2))**2)
+        print(self.g)
+        print()
+        TWto = (Vlof**2)/(2*self.g*dgr) + ((q*CDto)/self.WS) + self.mufric*(1 - ((q*CLto)/self.WS))
+        
         self.TWs[3] = TWto
-
         
 
     def TW_landing(self, etc):
         '''Other landing requirements (TO DO in the next project when landing matters)'''
         
-    def WSstall(self, Vstall, CLmax):
-        '''
-        Vstall: m/s
-        CLmax: maximum lift coefficient (with high lift devices)
-        '''
-        self.Vstall = Vstall #np.sqrt((2*self.WS)/(self.rho*CLmax))
-        self.CLmax = CLmax
-        self.stallWS = 0.5*self.rho*(self.Vstall**2)*CLmax
-        if self.stallWS > self.WS.max():
-            self.WS = np.linspace(self.WS.min(), self.stallWS, self.WS.size)
+        
+    # REVIEW HOW HE DID IT: https://www.youtube.com/watch?v=FSST56P3p0c
+    # def WSstall(self, Vstall):
+    #     '''
+    #     Vstall: ft/s
+    #     # CLmax: maximum lift coefficient (with high lift devices)
+    #     assume CLmax can vary and plot vs Wing loading
+    #     '''
+    #     self.Vstall = Vstall #np.sqrt((2*self.WS)/(self.rho*CLmax))
+    #     # self.CLmax = CLmax
+    #     self.stallWS = 0.5*self.rho*(self.Vstall**2)*CLmax
+    #     if self.stallWS > self.WS.max():
+    #         self.WS = np.linspace(self.WS.min(), self.stallWS, self.WS.size)
 
-        self.stallreq = True
+    #     self.stallreq = True
         
     def WSmaxproprange(self, Vcruise):
         '''
-        Vcruise: m/s
+        Vcruise: ft/s
         '''
         q = 0.5*self.rho*(Vcruise**2)
-        self.rangeWS = q*np.sqrt((1/self.k)*self.CD0)
+        self.rangeWS = q*np.sqrt((1/self.k)*self.CDmin)
         if self.rangeWS > self.WS.max():
             self.WS = np.linspace(self.WS.min(), self.rangeWS, self.WS.size)
         self.rangereq = True
@@ -203,7 +256,7 @@ class TW_WS:
         '''NOTE: TW is still used but all of these are converted to P/W in Watt/kg'''
         fig, ax = plt.subplots(figsize = (6, 4), dpi = 1000)
         
-        TWnames = [f'Sustained Turn: n = {self.n}, {self.Vturn} m/s', f'Cruise Speed: {self.Vcruise} m/s', f'Climb Rate: {self.Vv} m/s, {self.Vclimb} m/s', f'Ground Roll: {self.dgr} m', 'Landing (LATER)']
+        TWnames = [f'Sustained Turn: n = {self.n:.3f}, {self.Vturn:.1f} fps', f'Cruise Speed: {self.Vcruise:.1f} fps', f'Climb Rate: {self.Vv*60:.0f} fpm, {self.Vclimb:.1f} fps', f'Ground Roll: {self.dgr:.1f} ft', 'Landing (LATER)', f'Service Ceiling: {self.service_ceiling:.0f} ft']
         
         for i, TW in enumerate(self.TWs):
             if type(TW) != bool:
@@ -222,14 +275,14 @@ class TW_WS:
                 if specTWmax > TWmax:
                     TWmax = specTWmax
                     
-        if type(self.indepturnreq) != bool:
-            if self.indepturnreq < TWmin:
-                TWmin = self.indepturnreq
-            ax.plot(self.WS, self.indepturnreq*np.ones(self.WS.size), label = 'Base T/W turn req', path_effects = [patheffects.withTickedStroke(spacing = 10, angle = -135, length = 0.5)])
+        # if type(self.indepturnreq) != bool:
+        #     if self.indepturnreq < TWmin:
+        #         TWmin = self.indepturnreq
+        #     ax.plot(self.WS, self.indepturnreq*np.ones(self.WS.size), label = 'Base T/W turn req', path_effects = [patheffects.withTickedStroke(spacing = 10, angle = -135, length = 0.5)])
 
         TWgrid = np.linspace(TWmin, TWmax, self.WS.size)
         if self.stallreq:
-            ax.plot(self.stallWS*np.ones(TWgrid.size), TWgrid, label = f'Stall: {self.Vstall} m/s', path_effects = [patheffects.withTickedStroke(spacing = 10, angle = -135, length = 0.5)])
+            ax.plot(self.stallWS*np.ones(TWgrid.size), TWgrid, label = f'Stall: {self.Vstall:.1f} fps', path_effects = [patheffects.withTickedStroke(spacing = 10, angle = -135, length = 0.5)])
         
         if self.rangereq:
             ax.plot(self.rangeWS*np.ones(TWgrid.size), TWgrid, label = 'W/S of max range', path_effects = [patheffects.withTickedStroke(spacing = 10, angle = -135, length = 0.5)])
@@ -244,8 +297,10 @@ class TW_WS:
 
         plt.minorticks_on()
         plt.grid(True)#, which='both')
-        plt.xlabel(r'W/S (kg/m$^2$)')
-        plt.ylabel('P/W (watt/kg)')
+        # plt.xlabel(r'W/S (kg/m$^2$)')
+        plt.xlabel(r'W/S (lbf/ft$^2$)')
+        # plt.ylabel('P/W (watt/kg)')
+        plt.ylabel('T/W')
         if title != None:
             plt.title(title)
         plt.legend(fontsize = 8)
