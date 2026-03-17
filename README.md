@@ -10,9 +10,9 @@ CL, CD sweeps (including at least one RANS simulation), EM diagrams for altitude
 
 Projects:
 
-SN-1: RC COTS aircraft <100Wh, maximize range;
+- SN-1: RC COTS aircraft <100Wh, maximize range;
 FW, HL (Flying Wing, Hand Launched) (started 8/17/2025, tabled due to DBF 2026 + UAVDEX work, hopefully will resume over winter break)
-
+- SN-2: High altitude range maximization (HALE), delayed due to job search
 
 
 Learning OpenVSP:
