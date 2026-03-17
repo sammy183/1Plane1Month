@@ -16,17 +16,17 @@ FW, HL (Flying Wing, Hand Launched) (started 8/17/2025, tabled due to DBF 2026 +
 
 
 Learning OpenVSP:
-2025 OpenVSP workshop: https://openvsp.org/wiki/doku.php?id=workshop2025
-OpenVSP ground school: https://vspu.larc.nasa.gov/
+- 2025 OpenVSP workshop: https://openvsp.org/wiki/doku.php?id=workshop2025
+- OpenVSP ground school: https://vspu.larc.nasa.gov/
 
 Best Accessible Softwares:
-OpenVSP: https://openvsp.org/
-XFOIL: https://web.mit.edu/drela/Public/web/xfoil/ (anything by Drela is gold)
-QPROP: https://web.mit.edu/drela/Public/web/qprop/
-MSES: https://web.mit.edu/drela/Public/web/mses/
-Digital DATCOM; https://www.pdas.com/datcom.html (note: the pdas table of contents has many other useful softwares)
-XFLR5: https://www.xflr5.tech/xflr5.htm
-Hopefully UAVDEX when it's ready for electric aircraft propulsion
+- OpenVSP: https://openvsp.org/
+- XFOIL: https://web.mit.edu/drela/Public/web/xfoil/ (anything by Drela is gold)
+- QPROP: https://web.mit.edu/drela/Public/web/qprop/
+- Digital DATCOM; https://www.pdas.com/datcom.html (note: the pdas table of contents has many other useful softwares)
+- XFLR5: https://www.xflr5.tech/xflr5.htm
+
+And hopefully UAVDEX when it's ready! (for electric aircraft propulsion)
 
 Resources:
 
